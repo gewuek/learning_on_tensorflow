@@ -3,14 +3,14 @@ A record for learning TensorFlow and Keras<br />
 
 ## Trace the Con2D class<br />
 
-## Class ***Conv***<br />
+### Class Conv<br />
 https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/keras/layers/convolutional.py<br />
 ```
 class Conv(Layer):
 ```
 
 
-Class ***Layer***<br />
+### Class Layer<br />
 https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/keras/engine/base_layer.py
 ```
 class Layer(module.Module, version_utils.LayerVersionSelector):
@@ -43,13 +43,17 @@ Exmaple of Custom Layer:<br />
 ```
 
 
-Class ***Module***<br />
+### Class Module<br />
 https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/module/module.py
 ```
 class Module(tracking.AutoTrackable):
 ```
 Example of Custom layer:
 ```
+Base neural network module class.
+  A module is a named container for `tf.Variable`s, other `tf.Module`s and
+  functions which apply to user input. For example a dense layer in a neural
+  network might be implemented as a `tf.Module`
   >>> class Dense(tf.Module):
   ...   def __init__(self, input_dim, output_size, name=None):
   ...     super(Dense, self).__init__(name=name)
@@ -66,5 +70,15 @@ Example of Custom layer:
   <tf.Tensor: shape=(1, 2), dtype=float32, numpy=..., dtype=float32)>
 
 ```
+
+### Class tracking.AutoTrackable<br />
+```
+class AutoTrackable(base.Trackable):
+```
+
+
+
+
+
 
 

@@ -388,6 +388,64 @@ def tf_gen_op_wrapper_py(
     )
 ```
 
+### C++ function register here
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/ops/sparse_ops.cc
+```
+REGISTER_OP("SparseTensorDenseMatMul")
+    .Input("a_indices: Tindices")
+    .Input("a_values: T")
+    .Input("a_shape: int64")
+    .Input("b: T")
+    .Output("product: T")
+    .Attr("T: type")
+    .Attr("Tindices: {int32,int64} = DT_INT64")
+    .Attr("adjoint_a: bool = false")
+    .Attr("adjoint_b: bool = false")
+    .SetShapeFn([](InferenceContext* c) {
+      DimensionHandle unused_dim;
+      ShapeHandle unused;
+      ShapeHandle b;
+      ShapeHandle a_shape;
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 2, &unused));  // a_indices
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 1, &unused));  // a_values
+      TF_RETURN_IF_ERROR(c->MakeShapeFromShapeTensor(2, &a_shape));
+      TF_RETURN_IF_ERROR(c->WithRank(a_shape, 2, &a_shape));
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(3), 2, &b));
 
+      bool adjoint_a;
+      bool adjoint_b;
+      TF_RETURN_IF_ERROR(c->GetAttr("adjoint_a", &adjoint_a));
+      TF_RETURN_IF_ERROR(c->GetAttr("adjoint_b", &adjoint_b));
 
+      DimensionHandle output_right = c->Dim(b, adjoint_b ? 0 : 1);
+      DimensionHandle output_left = c->Dim(a_shape, adjoint_a ? 1 : 0);
+      DimensionHandle inner_left = c->Dim(a_shape, adjoint_a ? 0 : 1);
+      DimensionHandle inner_right = c->Dim(b, adjoint_b ? 1 : 0);
+      TF_RETURN_IF_ERROR(c->Merge(inner_left, inner_right, &unused_dim));
+      c->set_output(0, c->Matrix(output_left, output_right));
+      return Status::OK();
+    });
+```
+### C++ source code:
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/kernels/sparse_tensor_dense_matmul_op.cc
+```
+#define REGISTER_CPU(TypeT, TypeIndex)           \
+  REGISTER_KERNEL_BUILDER(                       \
+      Name("SparseTensorDenseMatMul")            \
+          .Device(DEVICE_CPU)                    \
+          .TypeConstraint<TypeT>("T")            \
+          .TypeConstraint<TypeIndex>("Tindices") \
+          .HostMemory("a_shape"),                \
+      SparseTensorDenseMatMulOp<CPUDevice, TypeT, TypeIndex>);
 
+...
+
+#define REGISTER_GPU(TypeT, TypeIndex)           \
+  REGISTER_KERNEL_BUILDER(                       \
+      Name("SparseTensorDenseMatMul")            \
+          .Device(DEVICE_GPU)                    \
+          .TypeConstraint<TypeT>("T")            \
+          .TypeConstraint<TypeIndex>("Tindices") \
+          .HostMemory("a_shape"),                \
+      SparseTensorDenseMatMulOp<GPUDevice, TypeT, TypeIndex>);
+```

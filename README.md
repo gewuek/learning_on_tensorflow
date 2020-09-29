@@ -84,6 +84,164 @@ class Trackable(object):
 ```
 
 
+## Trace Dense
+
+### Class Dense
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/keras/layers/core.py
+```
+class Dense(Layer):
+```
+Call function:
+```
+  def call(self, inputs):
+    return core_ops.dense(
+        inputs,
+        self.kernel,
+        self.bias,
+        self.activation,
+        dtype=self._compute_dtype_object)
+        
+        ...
+        
+from tensorflow.python.keras.layers.ops import core as core_ops
+
+```
+
+### Class dense
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/keras/layers/ops/core.py
+```
+  rank = inputs.shape.rank
+  if rank == 2 or rank is None:
+    if isinstance(inputs, sparse_tensor.SparseTensor):
+      outputs = sparse_ops.sparse_tensor_dense_matmul(inputs, kernel)
+    else:
+      outputs = gen_math_ops.mat_mul(inputs, kernel)
+  # Broadcast kernel to inputs.
+  else:
+    outputs = standard_ops.tensordot(inputs, kernel, [[rank - 1], [0]])
+    # Reshape the output back to the original ndim of the input.
+    if not context.executing_eagerly():
+      shape = inputs.shape.as_list()
+      output_shape = shape[:-1] + [kernel.shape[-1]]
+      outputs.set_shape(output_shape)
+```
+
+### Function sparse_tensor_dense_matmul
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/ops/sparse_ops.py
+```
+def sparse_tensor_dense_matmul(sp_a,
+                               b,
+                               adjoint_a=False,
+                               adjoint_b=False,
+                               name=None):
+  if isinstance(b, sparse_tensor.SparseTensor) \
+          or isinstance(b, sparse_tensor.SparseTensorValue):
+    # We can do C * D where C is sparse but if we want to do A * B when
+    # B is sparse we have to transpose. But AB = (B'A')' so we have to feed in
+    # the transpose of the arguments as well.
+    if adjoint_a != adjoint_b:
+      return array_ops.transpose(
+          sparse_tensor_dense_matmul(b, sp_a, adjoint_a, adjoint_b))
+    else:
+      return array_ops.transpose(
+          sparse_tensor_dense_matmul(
+              b, sp_a, adjoint_a=not adjoint_a, adjoint_b=not adjoint_b))
+
+  else:
+    sp_a = _convert_to_sparse_tensor(sp_a)
+    with ops.name_scope(name, "SparseTensorDenseMatMul",
+                        [sp_a.indices, sp_a.values, b]) as name:
+      b = ops.convert_to_tensor(b, name="b")
+      return gen_sparse_ops.sparse_tensor_dense_mat_mul(
+          a_indices=sp_a.indices,
+          a_values=sp_a.values,
+          a_shape=sp_a.dense_shape,
+          b=b,
+          adjoint_a=adjoint_a,
+          adjoint_b=adjoint_b)
+```
+### gen_sparse_ops.py
+gen_sparse_ops is generarted by bazel tools, described here:<br />
+https://stackoverflow.com/questions/41147734/looking-for-source-code-of-from-gen-nn-ops-in-tensorflow<br />
+The file can be on local installation:<br />
+~/anaconda3/envs/tf1.5/lib/python3.6/site-packages/tensorflow_core/python/ops<br />
+```
+def sparse_tensor_dense_mat_mul(a_indices, a_values, a_shape, b, adjoint_a=False, adjoint_b=False, name=None):
+  r"""Multiply SparseTensor (of rank 2) "A" by dense matrix "B".
+
+  No validity checking is performed on the indices of A.  However, the following
+  input format is recommended for optimal behavior:
+
+  if adjoint_a == false:
+    A should be sorted in lexicographically increasing order.  Use SparseReorder
+    if you're not sure.
+  if adjoint_a == true:
+    A should be sorted in order of increasing dimension 1 (i.e., "column major"
+    order instead of "row major" order).
+
+  Args:
+    a_indices: A `Tensor`. Must be one of the following types: `int32`, `int64`.
+      2-D.  The `indices` of the `SparseTensor`, size `[nnz, 2]` Matrix.
+    a_values: A `Tensor`.
+      1-D.  The `values` of the `SparseTensor`, size `[nnz]` Vector.
+    a_shape: A `Tensor` of type `int64`.
+      1-D.  The `shape` of the `SparseTensor`, size `[2]` Vector.
+    b: A `Tensor`. Must have the same type as `a_values`.
+      2-D.  A dense Matrix.
+    adjoint_a: An optional `bool`. Defaults to `False`.
+      Use the adjoint of A in the matrix multiply.  If A is complex, this
+      is transpose(conj(A)).  Otherwise it's transpose(A).
+    adjoint_b: An optional `bool`. Defaults to `False`.
+      Use the adjoint of B in the matrix multiply.  If B is complex, this
+      is transpose(conj(B)).  Otherwise it's transpose(B).
+    name: A name for the operation (optional).
+
+  Returns:
+    A `Tensor`. Has the same type as `a_values`.
+  """
+  _ctx = _context._context or _context.context()
+  if _ctx is not None and _ctx._thread_local_data.is_eager:
+    try:
+      _result = _pywrap_tensorflow.TFE_Py_FastPathExecute(
+        _ctx._context_handle, _ctx._thread_local_data.device_name,
+        "SparseTensorDenseMatMul", name, _ctx.post_execution_callbacks,
+        a_indices, a_values, a_shape, b, "adjoint_a", adjoint_a, "adjoint_b",
+        adjoint_b)
+      return _result
+    except _core._FallbackException:
+      try:
+        return sparse_tensor_dense_mat_mul_eager_fallback(
+            a_indices, a_values, a_shape, b, adjoint_a=adjoint_a,
+            adjoint_b=adjoint_b, name=name, ctx=_ctx)
+      except _core._SymbolicException:
+        pass  # Add nodes to the TensorFlow graph.
+    except _core._NotOkStatusException as e:
+      if name is not None:
+        message = e.message + " name: " + name
+      else:
+        message = e.message
+      _six.raise_from(_core._status_to_exception(e.code, message), None)
+  # Add nodes to the TensorFlow graph.
+  if adjoint_a is None:
+    adjoint_a = False
+  adjoint_a = _execute.make_bool(adjoint_a, "adjoint_a")
+  if adjoint_b is None:
+    adjoint_b = False
+  adjoint_b = _execute.make_bool(adjoint_b, "adjoint_b")
+  _, _, _op = _op_def_lib._apply_op_helper(
+        "SparseTensorDenseMatMul", a_indices=a_indices, a_values=a_values,
+                                   a_shape=a_shape, b=b, adjoint_a=adjoint_a,
+                                   adjoint_b=adjoint_b, name=name)
+  _result = _op.outputs[:]
+  _inputs_flat = _op.inputs
+  _attrs = ("T", _op._get_attr_type("T"), "Tindices",
+            _op._get_attr_type("Tindices"), "adjoint_a",
+            _op.get_attr("adjoint_a"), "adjoint_b", _op.get_attr("adjoint_b"))
+  _execute.record_gradient(
+      "SparseTensorDenseMatMul", _inputs_flat, _attrs, _result, name)
+  _result, = _result
+  return _result
+```
 
 
 

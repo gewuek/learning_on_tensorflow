@@ -281,7 +281,112 @@ def tf_gen_op_wrapper_private_py(
 ```
 Function tf_gen_op_wrapper_py is defined here:
 https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tensorflow.bzl
+```
+def tf_gen_op_wrapper_py(
+        name,
+        out = None,
+        hidden = None,
+        visibility = None,
+        deps = [],
+        require_shape_functions = False,
+        hidden_file = None,
+        generated_target_name = None,
+        op_whitelist = [],
+        cc_linkopts = lrt_if_needed(),
+        api_def_srcs = [],
+        compatible_with = []):
+    _ = require_shape_functions  # Unused.
 
+    if (hidden or hidden_file) and op_whitelist:
+        fail("Cannot pass specify both hidden and op_whitelist.")
+
+    # Construct a cc_binary containing the specified ops.
+    tool_name = "gen_" + name + "_py_wrappers_cc"
+    if not deps:
+        deps = [str(Label("//tensorflow/core:" + name + "_op_lib"))]
+    tf_cc_binary(
+        name = tool_name,
+        copts = tf_copts(),
+        linkopts = if_not_windows(["-lm", "-Wl,-ldl"]) + cc_linkopts,
+        linkstatic = 1,  # Faster to link this one-time-use binary dynamically
+        visibility = [clean_dep("//tensorflow:internal")],
+        deps = ([
+            clean_dep("//tensorflow/core:framework"),
+            clean_dep("//tensorflow/python:python_op_gen_main"),
+        ] + deps),
+    )
+
+    # Invoke the previous cc_binary to generate a python file.
+    if not out:
+        out = "ops/gen_" + name + ".py"
+
+    if hidden:
+        op_list_arg = ",".join(hidden)
+        op_list_is_whitelist = False
+    elif op_whitelist:
+        op_list_arg = ",".join(op_whitelist)
+        op_list_is_whitelist = True
+    else:
+        op_list_arg = "''"
+        op_list_is_whitelist = False
+
+    # Prepare ApiDef directories to pass to the genrule.
+    if not api_def_srcs:
+        api_def_args_str = ","
+    else:
+        api_def_args = []
+        for api_def_src in api_def_srcs:
+            # Add directory of the first ApiDef source to args.
+            # We are assuming all ApiDefs in a single api_def_src are in the
+            # same directory.
+            api_def_args.append(
+                "$$(dirname $$(echo $(locations " + api_def_src +
+                ") | cut -d\" \" -f1))",
+            )
+        api_def_args_str = ",".join(api_def_args)
+
+    if hidden_file:
+        # `hidden_file` is file containing a list of op names to be hidden in the
+        # generated module.
+        native.genrule(
+            name = name + "_pygenrule",
+            outs = [out],
+            srcs = api_def_srcs + [hidden_file],
+            exec_tools = [tool_name] + tf_binary_additional_srcs(),
+            cmd = ("$(location " + tool_name + ") " + api_def_args_str +
+                   " @$(location " + hidden_file + ") > $@"),
+            compatible_with = compatible_with,
+        )
+    else:
+        native.genrule(
+            name = name + "_pygenrule",
+            outs = [out],
+            srcs = api_def_srcs,
+            exec_tools = [tool_name] + tf_binary_additional_srcs(),
+            cmd = ("$(location " + tool_name + ") " + api_def_args_str + " " +
+                   op_list_arg + " " +
+                   ("1" if op_list_is_whitelist else "0") + " > $@"),
+            compatible_with = compatible_with,
+        )
+
+    # Make a py_library out of the generated python file.
+    if not generated_target_name:
+        generated_target_name = name
+    native.py_library(
+        name = generated_target_name,
+        srcs = [out],
+        srcs_version = "PY2AND3",
+        visibility = visibility,
+        deps = [
+            clean_dep("//tensorflow/python:framework_for_generated_wrappers_v2"),
+        ],
+        # Instruct build_cleaner to try to avoid using this rule; typically ops
+        # creators will provide their own tf_custom_op_py_library based target
+        # that wraps this one.
+        tags = ["avoid_dep"],
+        compatible_with = compatible_with,
+    )
+```
 
 
 

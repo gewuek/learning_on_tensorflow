@@ -242,6 +242,46 @@ def sparse_tensor_dense_mat_mul(a_indices, a_values, a_shape, b, adjoint_a=False
   _result, = _result
   return _result
 ```
+Tools Trace:<br />
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/BUILD
+```
+tf_gen_op_wrapper_private_py(
+    name = "sparse_ops_gen",
+)
+
+...
+
+load("//tensorflow/python:build_defs.bzl", "tf_gen_op_wrapper_private_py")
+```
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/build_defs.bzl
+```
+def tf_gen_op_wrapper_private_py(
+        name,
+        out = None,
+        deps = [],
+        require_shape_functions = False,
+        visibility = []):
+    if not name.endswith("_gen"):
+        fail("name must end in _gen")
+    if not visibility:
+        visibility = ["//visibility:private"]
+    bare_op_name = name[:-4]  # Strip off the _gen
+    tf_gen_op_wrapper_py(
+        name = bare_op_name,
+        out = out,
+        visibility = visibility,
+        deps = deps,
+        require_shape_functions = require_shape_functions,
+        generated_target_name = name,
+        api_def_srcs = [
+            "//tensorflow/core/api_def:base_api_def",
+            "//tensorflow/core/api_def:python_api_def",
+        ],
+    )
+```
+Function tf_gen_op_wrapper_py is defined here:
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/tensorflow.bzl
+
 
 
 

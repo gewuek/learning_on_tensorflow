@@ -2,6 +2,7 @@
 
 ## Tensor Class<br />
 ***class Tensor(internal.NativeObject, core_tf_types.Tensor):<br />***
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/framework/ops.py
 ```
   """A tensor is a multidimensional array of elements represented by a
   `tf.Tensor` object.  All elements are of a single known data type.
